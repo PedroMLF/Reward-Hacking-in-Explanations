@@ -172,3 +172,13 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Added:
+checkpoints
+data/*/*.joblib
+data/*/*.json
+motivation_experiment/*.json
+motivation_experiment/*.joblib
+figures/*
+outputs/*
+wandb/*
