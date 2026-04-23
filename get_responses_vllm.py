@@ -25,6 +25,13 @@ def main(
     # Set random seed
     set_seed(seed)
 
+    # Set save path
+    approach_fp, prompt_fp = os.path.splitext(os.path.basename(input_path))[0].split('_')
+    save_path = f"{output_dir}{os.path.sep}{approach_fp}_{prompt_fp}_{data_type}_{split}{suffix}.joblib"
+    if os.path.exists(save_path):
+        print(f"\n\nPath {save_path} already exists. Skipping.\n\n")
+        return
+
     # Load data
     print(f"Loading data from: {input_path}")
     data = joblib.load(input_path)[data_type][split]
@@ -73,7 +80,8 @@ def main(
     if 'categories' in data.keys():
         output_data['categories'] = data['categories'][:number_entries_used]
 
-    for gen_seed in range(0, 10 * number_generated_examples, 10):
+    assert seed < 10
+    for gen_seed in range(seed, 10  * number_generated_examples, 10):
         # Update seed
         sampling_params.seed = gen_seed
         print(f">> Generating with seed: {sampling_params.seed}")
@@ -87,8 +95,6 @@ def main(
             output_data['responses'][ix].append(output.outputs[0].text)
 
     # Save
-    approach, prompt = os.path.splitext(os.path.basename(input_path))[0].split('_')
-    save_path = f"{output_dir}{os.path.sep}{approach}_{prompt}_{data_type}_{split}{suffix}.joblib"
     print(f"Saving to: {save_path}")
     joblib.dump(output_data, save_path, compress=True)
 

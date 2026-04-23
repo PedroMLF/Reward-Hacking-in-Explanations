@@ -1,17 +1,18 @@
 #!/bin/bash
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --partition=gpu_h100
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --gpus=1
 
-#SBATCH -o outputs/wino/llama3-8B/dpo/training/log_train_llama.txt
+#SBATCH -o outputs/wino/llama3-3B/dpo/training/log_train_llama.txt
 
-DATA_PATH="data/wino/"
-DPO_DATA_PATH="outputs/wino/llama3-8B/dpo/data"
-SAVE_PATH="checkpoints/wino_dpo"
-MODEL="meta-llama/Meta-Llama-3.1-8B-Instruct"
+DPO_DATA_PATH="outputs/wino/llama3-3B/dpo"
+SAVE_PATH="checkpoints/llama3-3B/wino_dpo"
+
+#MODEL="meta-llama/Meta-Llama-3.1-8B-Instruct"
+MODEL="meta-llama/Llama-3.2-3B-Instruct"
 
 date '+[%H:%M:%S-%d/%m/%y]'
 
@@ -19,21 +20,25 @@ date '+[%H:%M:%S-%d/%m/%y]'
 PROJECT_HOME=${PWD}
 source ${PROJECT_HOME}/my_env/bin/activate
 
-for APPROACH in negative; do
-    for RW in skywork-llama_none skywork-llama_heuristic skywork-llama_heuristic_oracle; do
+for SEED in 0 1 2; do
 
-        echo -e "\n--- ${APPROACH} + ${RW} ---\n"
+    DPO_DATA_PATH_SEED=${DPO_DATA_PATH}/seed_${SEED}/data
+    SAVE_PATH_SEED=${SAVE_PATH}/seed_${SEED}
+
+    for RW in sk-llama_original sk-llama_aug-rm-c sk-llama_aug-rm-d; do
+
+        echo -e "\n\n--- ${RW} ---\n\n"
 
         # Some hparams inspired by:
         # https://github.com/huggingface/alignment-handbook/blob/main/recipes/zephyr-7b-beta/dpo/config_qlora.yaml
         # https://github.com/huggingface/alignment-handbook/blob/main/recipes/zephyr-7b-gemma/dpo/config_full.yaml
         # https://www.philschmid.de/rl-with-llms-in-2025-dpo
 
-        python ${PROJECT_HOME}/train_dpo.py \
-            --dataset_path ${DPO_DATA_PATH}/bias_${APPROACH}_${RW} \
+        python -u ${PROJECT_HOME}/train_dpo.py \
+            --dataset_path ${DPO_DATA_PATH_SEED}/bias_negative_${RW} \
             --model_name_or_path ${MODEL} \
-            --output_dir ${SAVE_PATH}/bias_${APPROACH}_${RW} \
-            --run_name dpo_${APPROACH}_${RW} \
+            --output_dir ${SAVE_PATH_SEED}/bias_negative_${RW} \
+            --run_name dpo_negative_${RW} \
             --num_train_epochs 5 \
             --per_device_train_batch_size 8 \
             --gradient_accumulation_steps 2 \
@@ -51,18 +56,18 @@ for APPROACH in negative; do
             --tf32 True \
             --eval_strategy epoch \
             --save_strategy epoch \
+            --save_only_model \
             --no_remove_unused_columns \
             --beta 0.1 \
-            --seed 0 \
-            --run_name wino_dpo_${APPROACH}_${RW} \
+            --seed ${SEED} \
+            --run_name wino_dpo_negative_${RW}_seed-${SEED} \
             --use_peft \
-            --lora_alpha 64 \
-            --lora_r 32 \
+            --lora_alpha 32 \
+            --lora_r 16 \
             --lora_dropout 0.05 \
             --lora_target_modules "q_proj" "k_proj" "v_proj" "o_proj" "gate_proj" "up_proj" "down_proj" \
             --lora_modules_to_save "lm_head" "embed_tokens"
 
         date '+[%H:%M:%S-%d/%m/%y]'
-
     done
 done

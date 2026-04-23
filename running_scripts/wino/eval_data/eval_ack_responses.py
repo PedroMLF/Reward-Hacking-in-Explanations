@@ -4,7 +4,7 @@ from sklearn.metrics import classification_report
 
 if __name__ == "__main__":
     # Load JSON file
-    with open('wino_eval_responses_eval_data.json', 'r') as f:
+    with open('running_scripts/wino/eval_data/wino_eval_responses_eval_data.json', 'r') as f:
         data = json.load(f)
 
     # Predicted/true labels

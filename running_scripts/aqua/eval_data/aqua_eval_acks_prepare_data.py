@@ -7,7 +7,7 @@ def main():
     random.seed(0)
 
     # Load data
-    path = "../../../outputs/aqua/llama3-8B/bon/cot_negative_orig_test_data.joblib"
+    path = "outputs/aqua/llama3-8B/bon/seed_0/cot_negative_orig_test_data.joblib"
     data = joblib.load(path)
 
     # Sample ixs for 1 and for 2, more from orig prompt
@@ -56,7 +56,7 @@ def main():
             'simple_ack_label': example['book_ack_simple'],
         }
 
-    with open('aqua_eval_responses_eval_data.json', 'w') as fp:
+    with open('running_scripts/aqua/eval_data/aqua_eval_responses_eval_data.json', 'w') as fp:
         json.dump(data_to_save, fp)
 
 

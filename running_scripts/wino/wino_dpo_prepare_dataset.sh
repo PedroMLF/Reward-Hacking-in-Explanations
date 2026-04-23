@@ -1,27 +1,29 @@
 #!/bin/bash
-#SBATCH --time=12:00:00
+#SBATCH --time=35:00:00
 #SBATCH --partition=gpu_h100
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --gpus=1
 
-#SBATCH -o outputs/wino/llama3-8B/dpo/log_data.txt
+#SBATCH -o outputs/wino/llama3-3B/dpo/log_data.txt
 
 # --------------------------------------------------------
 
 # Decide what to run
 RUN_RESPONSES=true
 RUN_EVAL_RESPONSES=true
-RUN_REWARD_NONE=true
-RUN_REWARD_HEURISTIC=true
+RUN_REWARD=true
 RUN_PREPARE_DATA=true
 
 # Args
-SAVE_PATH="outputs/wino/llama3-8B/dpo/data/"
+SAVE_PATH="outputs/wino/llama3-3B/dpo/"
 DATA_PATH="data/wino/"
 NUM_EXAMPLES=10000
-MODEL="meta-llama/Meta-Llama-3.1-8B-Instruct"
+
+#MODEL="meta-llama/Meta-Llama-3.1-8B-Instruct"
+MODEL="meta-llama/Llama-3.2-3B-Instruct"
+
 REWARD_MODEL_1="Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
 REWARD_MODEL_2="Skywork/Skywork-Reward-Gemma-2-27B-v0.2"
 
@@ -31,99 +33,91 @@ date '+[%H:%M:%S-%d/%m/%y]'
 PROJECT_HOME=${PWD}
 source ${PROJECT_HOME}/my_env/bin/activate
 
-# --- Get responses ---
-if ${RUN_RESPONSES}; then
-    echo -e "---------- Running responses ...\n"
-    for APPROACH in negative; do
-        for DATA in orig cf; do
-            for SPLIT in valid train; do
+for SEED in 0 1 2; do
+
+    echo -e "\nSEED: ${SEED}\n"
+
+    SAVE_PATH_SEED=${SAVE_PATH}/seed_${SEED}/data
+
+    # --- Get responses ---
+    if ${RUN_RESPONSES}; then
+        echo -e "---------- Running responses ...\n"
+        for SPLIT in orig cf; do
+            for DATA in valid train; do
                 python ${PROJECT_HOME}/get_responses_vllm.py \
                     ${MODEL} \
-                    ${SAVE_PATH} \
-                    ${DATA_PATH}/bias_${APPROACH}.joblib \
-                    ${DATA} \
+                    ${SAVE_PATH_SEED} \
+                    ${DATA_PATH}/bias_negative.joblib \
                     ${SPLIT} \
+                    ${DATA} \
                     10 \
+                    --seed ${SEED} \
                     --number_entries_used ${NUM_EXAMPLES}
                 date '+[%H:%M:%S-%d/%m/%y]'; echo -e "\n\n\n"
             done
         done
-    done
-fi
+    fi
 
-# --- Eval responses ---
-if ${RUN_EVAL_RESPONSES}; then
-    echo -e "---------- Running eval responses ...\n"
-    for APPROACH in negative; do
-        for DATA in orig cf; do
-            for SPLIT in valid train; do
-                python ${PROJECT_HOME}/eval_responses_wino.py \
-                    ${SAVE_PATH}/bias_${APPROACH}_${DATA}_${SPLIT}.joblib \
-                    --seed 0
+    # --- Eval responses ---
+    if ${RUN_EVAL_RESPONSES}; then
+        echo -e "---------- Running eval responses ...\n"
+        for SPLIT in orig cf; do
+            for DATA in valid train; do
+                # We don't run the ack step in this case
+                python ${PROJECT_HOME}/get_responses_data.py \
+                    ${SAVE_PATH_SEED}/bias_negative_${SPLIT}_${DATA}.joblib \
+                    wino \
+                    --seed ${SEED}
                 date '+[%H:%M:%S-%d/%m/%y]'; echo -e "\n\n"
-            done
-        done
-    done
-fi
-
-for REWARD_MODEL in ${REWARD_MODEL_1} ${REWARD_MODEL_2}; do
-    # --- Run reward model w/ none ---
-    if ${RUN_REWARD_NONE}; then
-        echo -e "---------- Running reward none ...\n"
-        for APPROACH in negative; do
-            for SPLIT in valid train; do
-                python ${PROJECT_HOME}/eval_rewards.py \
-                    ${SAVE_PATH}/bias_${APPROACH}_orig_${SPLIT}_data.joblib \
-                    ${REWARD_MODEL} \
-                    none \
-                    --batch_size 32 \
-                    --seed 0
-                date '+[%H:%M:%S-%d/%m/%y]'; echo -e "\n\n"
-
             done
         done
     fi
 
-    # --- Run reward model w/ heuristic ---
-    if ${RUN_REWARD_HEURISTIC}; then
-        echo -e "---------- Running reward heuristic ...\n"
-        for APPROACH in negative; do
-            for SPLIT in valid train; do
-                python ${PROJECT_HOME}/eval_rewards.py \
-                    ${SAVE_PATH}/bias_${APPROACH}_orig_${SPLIT}_data.joblib \
-                    ${REWARD_MODEL} \
-                    heuristic \
-                    --batch_size 32 \
-                    --pcf_path ${SAVE_PATH}/bias_${APPROACH}_cf_${SPLIT}_data.joblib \
-                    --setting "wino" \
-                    --seed 0 
+    # --- Rewards ---
+    if ${RUN_REWARD}; then
+        for RW_MODEL in ${REWARD_MODEL_1} ${REWARD_MODEL_2}; do
+            for DATA in valid train; do
+                # We need original / augmented for train valid
+                # In this case we don't need for CF
+                echo -e "---------- Running rewards ...\n"
+                python -u ${PROJECT_HOME}/get_rewards_data.py \
+                    ${SAVE_PATH_SEED}/bias_negative_orig_${DATA}_data.joblib \
+                    ${RW_MODEL} \
+                    --batch_size 10 \
+                    --seed ${SEED}
                 date '+[%H:%M:%S-%d/%m/%y]'; echo -e "\n\n"
 
-                python ${PROJECT_HOME}/eval_rewards.py \
-                    ${SAVE_PATH}/bias_${APPROACH}_orig_${SPLIT}_data.joblib \
-                    ${REWARD_MODEL} \
-                    heuristic \
-                    --batch_size 32 \
-                    --pcf_path ${SAVE_PATH}/bias_${APPROACH}_cf_${SPLIT}_data.joblib \
-                    --setting "wino" \
-                    --seed 0 \
-                    --do_oracle
+                python -u ${PROJECT_HOME}/get_rewards_data.py \
+                    ${SAVE_PATH_SEED}/bias_negative_orig_${DATA}_data.joblib \
+                    ${RW_MODEL} \
+                    --batch_size 10 \
+                    --setting wino \
+                    --do_augmented \
+                    --seed ${SEED}
                 date '+[%H:%M:%S-%d/%m/%y]'; echo -e "\n\n"
             done
+        done
+
+        for RW in sk-llama sk-gemma; do
+            for DATA in valid train; do
+                python -u ${PROJECT_HOME}/eval_rewards.py \
+                    --pcf_path ${SAVE_PATH_SEED}/bias_negative_cf_${DATA}_data.joblib \
+                    --rm_orig_path ${SAVE_PATH_SEED}/bias_negative_orig_${DATA}_data_${RW}_original.joblib \
+                    --rm_aug_path ${SAVE_PATH_SEED}/bias_negative_orig_${DATA}_data_${RW}_augmented.joblib \
+                    --seed ${SEED}
+            done
+        done
+    fi
+
+    # --- Prepare DPO data ---
+    if ${RUN_PREPARE_DATA}; then
+        echo -e "---------- Running prepare data ...\n"
+        for RW in sk-llama_original sk-llama_aug-rm-c sk-llama_aug-rm-d sk-gemma_original sk-gemma_aug-rm-c sk-gemma_aug-rm-d; do
+            python dpo_prepare_dataset.py \
+                ${SAVE_PATH_SEED}/bias_negative_orig_train_data_${RW}.joblib \
+                ${SAVE_PATH_SEED}/bias_negative_orig_valid_data_${RW}.joblib \
+                --seed ${SEED}
+            date '+[%H:%M:%S-%d/%m/%y]'; echo -e "\n\n"
         done
     fi
 done
-
-# --- Prepare DPO data ---
-if ${RUN_PREPARE_DATA}; then
-    echo -e "---------- Running prepare data ...\n"
-    for APPROACH in negative; do
-        for RW in skywork-llama_none skywork-llama_heuristic skywork-llama_heuristic_oracle skywork-gemma_none skywork-gemma_heuristic skywork-gemma_heuristic_oracle; do
-            python dpo_prepare_dataset.py \
-                ${SAVE_PATH}/bias_${APPROACH}_orig_train_data_${RW}.joblib \
-                ${SAVE_PATH}/bias_${APPROACH}_orig_valid_data_${RW}.joblib
-            date '+[%H:%M:%S-%d/%m/%y]'; echo -e "\n\n"
-        done
-    done
-
-fi

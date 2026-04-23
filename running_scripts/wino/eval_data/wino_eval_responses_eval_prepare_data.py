@@ -7,8 +7,8 @@ def main():
     random.seed(0)
 
     # Load data
-    path_1 = "../../../outputs/wino/llama3-8B/bon/bias_negative_orig_test_data.joblib"
-    path_2 = "../../../outputs/wino/llama3-8B/bon/bias_negative_cf_test_data.joblib"
+    path_1 = "outputs/wino/llama3-8B/bon/seed_0/bias_negative_orig_test_data.joblib"
+    path_2 = "outputs/wino/llama3-8B/bon/seed_0/bias_negative_cf_test_data.joblib"
     data_1 = joblib.load(path_1)
     data_2 = joblib.load(path_2)
 
@@ -33,7 +33,7 @@ def main():
         aux_sample_ack = []
         aux_sample_noack = []
         for sample in samples:
-            if sample['bias_ack']:
+            if sample['pf_ack']:
                 aux_sample_ack.append(sample)
             else:
                 aux_sample_noack.append(sample)
@@ -58,12 +58,12 @@ def main():
         data_to_save[sample_ix] = {
             'true_ack_label': None,
             'full_response': example['full_response'],
-            'pred_ack_label': example['bias_ack'],
-            #'pred_ack_label_just': example['bias_ack_justification'],
+            'pred_ack_label': example['pf_ack'],
+            #'pred_ack_label_just': example['pf_ack_justification'],
             #'query': example['query'],
         }
 
-    with open('wino_eval_responses_eval_data.json', 'w') as fp:
+    with open('running_scripts/wino/eval_data/wino_eval_responses_eval_data.json', 'w') as fp:
         json.dump(data_to_save, fp)
 
 

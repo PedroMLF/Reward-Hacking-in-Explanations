@@ -2,6 +2,7 @@
 
 import os
 from dataclasses import dataclass, field
+from dotenv import load_dotenv
 from glob import glob
 from typing import Optional
 
@@ -9,10 +10,13 @@ import torch
 from peft import PeftConfig, PeftModel
 from transformers import AutoModelForCausalLM, AutoModelForSequenceClassification, AutoTokenizer, HfArgumentParser
 
-
-import env_setup
-
-env_setup.setup_env(use_temp=False)
+load_dotenv()
+HF_MODELS_CACHE_DIR=os.environ.get("HF_MODELS_CACHE_DIR")
+HF_TOKEN=os.environ.get("HF_TOKEN")
+os.environ['HF_DATASETS_CACHE'] = HF_MODELS_CACHE_DIR
+os.environ['HF_HOME'] = HF_MODELS_CACHE_DIR
+os.environ['TRANSFORMERS_CACHE'] = HF_MODELS_CACHE_DIR
+os.environ['TOKENIZERS_PARALLELISM'] = "false"
 
 
 @dataclass
@@ -41,18 +45,13 @@ if __name__ == "__main__":
 
     peft_config = PeftConfig.from_pretrained(adapter_model_name)
     if peft_config.task_type == "SEQ_CLS":
+        # The sequence classification task is used for the reward model in PPO
         model = AutoModelForSequenceClassification.from_pretrained(
-            script_args.base_model_name,
-            num_labels=1,
-            torch_dtype=torch.bfloat16,
-            cache_dir=os.environ.get("HF_MODELS_CACHE_DIR"),
+            script_args.base_model_name, num_labels=1, torch_dtype=torch.bfloat16
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            script_args.base_model_name,
-            return_dict=True,
-            torch_dtype=torch.bfloat16,
-            cache_dir=os.environ.get("HF_MODELS_CACHE_DIR"),
+            script_args.base_model_name, return_dict=True, torch_dtype=torch.bfloat16
         )
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.base_model_name)
@@ -65,3 +64,5 @@ if __name__ == "__main__":
 
     model.save_pretrained(f"{script_args.output_name}")
     tokenizer.save_pretrained(f"{script_args.output_name}")
+
+#python merge_peft_model.py --base_model_name "meta-llama/Meta-Llama-3.1-8B-Instruct" --adapter_model_name checkpoints/math_dpo/cot_positive_armorm_none/checkpoint-560 --output_name checkpoints/math_dpo/cot_positive_armorm_none/final_checkpoint_merged

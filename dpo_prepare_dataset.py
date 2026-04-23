@@ -12,39 +12,42 @@ def collect_chosen_rejected(data):
     chosen = []
     rejected = []
 
-    num_orig_max_not_valid = 0
-    num_max_min_rw_is_the_same = 0
+    cnt_no_valid_responses = 0
+    cnt_ch_rj_same_reward_score = 0
     for example_data in data:
+        assert len(example_data) == 10
+
+        # Collect all rewards and response is valid values
         example_data_rewards = [ed['reward'] for ed in example_data]
         example_data_is_valid = [ed['response_is_valid'] for ed in example_data]
-        # If no valid examples, skip
+
+        # If no valid examples, skip example
         if not any(example_data_is_valid):
-            num_orig_max_not_valid += 1
+            cnt_no_valid_responses += 1
             continue
 
-        # Sort by reward
-        data_tuple = [(i, x, y) for i, (x, y) in enumerate(zip(example_data_rewards, example_data_is_valid))]
+        # Collect triplets (index, reward, is valid) and sort by reward
+        data_tuple = [(i, r, v) for i, (r, v) in enumerate(zip(example_data_rewards, example_data_is_valid))]
         data_tuple = sorted(data_tuple, key=lambda x: x[1], reverse=True)
 
-        # Keep highest reward+valid as chosen, lowest reward as rejected
+        # Keep highest reward and valid as chosen, lowest reward as rejected
         only_valid_ixs = list(filter(lambda x: x[2], data_tuple))
-        max_ixs = [only_valid_ixs[0][0]]
-        min_ixs = [data_tuple[-1][0]]
+        max_ix = only_valid_ixs[0][0]
+        min_ix = data_tuple[-1][0]
 
-        for max_ix, min_ix in zip(max_ixs, min_ixs):
-            # Rewards should be different
-            if example_data[max_ix]['reward'] == example_data[min_ix]['reward']:
-                num_max_min_rw_is_the_same += 1
-                continue
+        # Rewards should be different
+        if example_data[max_ix]['reward'] == example_data[min_ix]['reward']:
+            cnt_ch_rj_same_reward_score += 1
+            continue
 
-            # Add to chosen/reject list
-            assert example_data[max_ix]['reward'] > example_data[min_ix]['reward']
-            chosen.append(example_data[max_ix])
-            rejected.append(example_data[min_ix])
+        # Add to chosen/reject list
+        assert example_data[max_ix]['reward'] > example_data[min_ix]['reward']
+        chosen.append(example_data[max_ix])
+        rejected.append(example_data[min_ix])
 
     print(f"\n\nFinal: {len(chosen)} examples")
-    print(f"# Original max ixs that did not have a valid answer: {num_orig_max_not_valid}")
-    print(f"# Examples skipped due to min_ix == max_ix: {num_max_min_rw_is_the_same}")
+    print(f"# Original max ixs that did not have a valid answer: {cnt_no_valid_responses}")
+    print(f"# Examples skipped due to min_ix == max_ix: {cnt_ch_rj_same_reward_score}")
     print("# Rejected samples that have non-valid answer: ", len([rj['answer'] for rj in rejected if not rj['response_is_valid']]))
     rw_diffs = [ch['reward'] - rj['reward'] for ch, rj in zip(chosen, rejected)]
     print(f"Mean diff rewards: {np.mean(rw_diffs):.2f} +- {np.std(rw_diffs):.2f}")
@@ -68,10 +71,10 @@ def build_dataset(chosen_samples, rejected_samples):
     return dataset_entries
 
 
-def main(input_path_train, input_path_valid):
+def main(input_path_train, input_path_valid, seed):
 
     # Set seed    
-    set_seed(0)
+    set_seed(seed)
 
     # Load data
     print(f"Loading {input_path_train} ...")
@@ -86,12 +89,12 @@ def main(input_path_train, input_path_valid):
 
     # Build dataset
     train_dataset_entries = build_dataset(
-        train_chosen_rejected['chosen'],
-        train_chosen_rejected['rejected']
+        chosen_samples=train_chosen_rejected['chosen'],
+        rejected_samples=train_chosen_rejected['rejected']
     )
     valid_dataset_entries = build_dataset(
-        valid_chosen_rejected['chosen'],
-        valid_chosen_rejected['rejected'],
+        chosen_samples=valid_chosen_rejected['chosen'],
+        rejected_samples=valid_chosen_rejected['rejected'],
     )
 
     train_dataset = Dataset.from_list(train_dataset_entries)
@@ -117,9 +120,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('input_path_train', type=str)    
     parser.add_argument('input_path_valid', type=str)
+    parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
     
     assert os.path.exists(args.input_path_train), args.input_path_train
     assert os.path.exists(args.input_path_valid), args.input_path_valid
 
-    main(input_path_train=args.input_path_train, input_path_valid=args.input_path_valid)
+    main(input_path_train=args.input_path_train, input_path_valid=args.input_path_valid, seed=args.seed)

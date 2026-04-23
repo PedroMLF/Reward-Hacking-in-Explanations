@@ -38,7 +38,7 @@ def main():
     # Variables
     num_book_entries=3
     num_book_solutions=2
-    num_train_examples=5000
+    num_train_examples = 5000
 
     # Load dataset 
     print("Loading data...")
@@ -72,6 +72,7 @@ def main():
 
     # Collect questions and answers
     # 0 - question, 1 - options, 2 - rationale, 3 - correct ix
+    # NOTE: For no cot, just change 'rationale' to 'correct'
     all_train_data = [(x['question'], x['options'], x['rationale'], x['correct_ix']) for x in train_dataset]
     valid_data = [(x['question'], x['options'], x['rationale'], x['correct_ix']) for x in valid_dataset]
     test_data = [(x['question'], x['options'], x['rationale'], x['correct_ix']) for x in test_dataset]
@@ -95,7 +96,7 @@ def main():
             # Get book ixs
             possible_ixs = list(range(len(book_data)))
 
-            # Sample entries in the book and solutions from there
+            # Sample the problems to be added to the book, and then those that will have solutions
             book_entries_ixs = random.sample(possible_ixs, k=num_book_entries-1)
             book_entries_ixs = [(book_data, ix) for ix in book_entries_ixs]
             book_solutions_ixs_cf = random.sample(book_entries_ixs, k=num_book_solutions)
@@ -103,6 +104,7 @@ def main():
             # Book entries read from the book data, the added example ix reads from the respective data split
             book_entries_ixs = book_entries_ixs + [(data_split, example_ix)]
             # Create the book solutions for the original prompt
+            # We keep all solved problems, expcept for the last one (to be replaced with the query solution)
             book_solutions_ixs = book_solutions_ixs_cf[:-1] + [(data_split, example_ix)]
             # Sort the book entries
             random.shuffle(book_entries_ixs)
@@ -153,6 +155,7 @@ def main():
             assert query.split("\n\n")[1] in aux_book_prompt_orig
             assert query.split("\n\n")[1] in aux_book_prompt_cf
             # Solution only in orig prompt
+            # NOTE: This check does not make sense when no-cot
             assert example[2] in query_orig
             assert example[2] not in query_cf
             # Orig and CF prompt are the same, except for solutions
